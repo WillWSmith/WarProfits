@@ -47,12 +47,66 @@ function updateUI() {
       ownedElem.style.display = "none";
     }
   }
+  // Update scientist hire button with new cost
+const nextCost = Math.floor(
+  research.scientists.baseCost * Math.pow(research.scientists.costMultiplier, research.scientists.count)
+);
+document.getElementById("buyScientist").textContent = `Hire Scientist ($${nextCost})`;
+
+  updateResearchUI();
 }
+
+function updateResearchUI() {
+  document.getElementById("researchProgress").textContent =
+    `Progress: ${Math.min(100, (research.current.progress / research.current.required * 100)).toFixed(2)}%`;
+  document.getElementById("scientistCount").textContent =
+    `Scientists: ${research.scientists.count}`;
+}
+
 
 function buyFactory(key) {
   factories[key].owned += 1;
   updateUI();
 }
+
+const research = {
+  current: {
+    name: "Unlock Bronze Age",
+    progress: 0, // 0 to 100
+    required: 1000, // base total points to reach
+    unlocked: false,
+  },
+  scientists: {
+    count: 0,
+    baseCost: 1000,
+    costMultiplier: 1.15
+  }
+};
+
+function updateResearch(elapsedSeconds) {
+  if (research.current.unlocked) return;
+
+  const baseRate = 1; // base points per second
+  const scientists = research.scientists.count;
+  const progressRate = baseRate * Math.log2(scientists + 1); // diminishing returns
+
+  research.current.progress += progressRate * elapsedSeconds;
+
+  if (research.current.progress >= research.current.required) {
+    research.current.unlocked = true;
+    alert("🎉 Bronze Age Unlocked!");
+  }
+}
+
+function buyScientist() {
+  const cost = Math.floor(research.scientists.baseCost * Math.pow(research.scientists.costMultiplier, research.scientists.count));
+  if (gameState.money >= cost) {
+    gameState.money -= cost;
+    research.scientists.count += 1;
+    updateUI();
+  }
+}
+
 
 function gameLoop() {
   const now = Date.now();
@@ -65,6 +119,7 @@ function gameLoop() {
   }
 
   gameState.money += incomePerSec * elapsed;
+  updateResearch(elapsed);
   updateUI();
 }
 
@@ -101,6 +156,7 @@ function showSaveNotice() {
 }
 
 document.getElementById("saveButton").addEventListener("click", saveGame);
+document.getElementById("buyScientist").addEventListener("click", buyScientist);
 
 // Start game
 loadGame();
