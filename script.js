@@ -147,7 +147,7 @@ function initAgeUI(ageKey) {
     div.innerHTML = `
       <h3>${factory.name} Factory</h3>
       <p id="${ageKey}-${key}-info">Produces $${gph.toLocaleString()}/hr each</p>
-      <p id="${ageKey}-${key}-owned" style="display:none;">Owned: <span id="${ageKey}-${key}-count">0</span></p>
+      <p id="${ageKey}-${key}-owned">Owned: <span id="${ageKey}-${key}-count">${factory.owned}</span></p>
       <button id="buy-${ageKey}-${key}">Buy ${factory.name} Factory ($${cost.toLocaleString()})</button>
     `;
     container.appendChild(div);
@@ -166,22 +166,19 @@ function updateFactoriesUI() {
     for (const key in age.factories) {
       const f = age.factories[key];
       const info = document.getElementById(`${ageKey}-${key}-info`);
-      const ownedElem = document.getElementById(`${ageKey}-${key}-owned`);
       const countElem = document.getElementById(`${ageKey}-${key}-count`);
       const buyBtn = document.getElementById(`buy-${ageKey}-${key}`);
       const card = document.getElementById(`${ageKey}-${key}-card`);
 
       const effectiveGpm = getEffectiveGpm(f);
       const effectiveGph = effectiveGpm * 60;
+      countElem.textContent = f.owned;
       if (f.owned > 0) {
         // Show production per hour for owned factories
         info.textContent = `Producing $${(f.owned * effectiveGph).toLocaleString()}/hr total`;
-        ownedElem.style.display = "block";
-        countElem.textContent = f.owned;
       } else {
         // Show base production per hour when none owned
         info.textContent = `Produces $${(f.baseGpm * 60).toLocaleString()}/hr each`;
-        ownedElem.style.display = "none";
       }
 
       if (buyBtn) {
@@ -206,7 +203,7 @@ function buyFactory(ageKey, factoryKey, cardElement) {
   if (gameState.money >= cost) {
     gameState.money -= cost;
     factory.owned += 1;
-    updateFactoriesUI();
+    updateUI();
     playPurchaseSound();
     flashElement(cardElement);
   }
