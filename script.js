@@ -79,6 +79,30 @@ const scientists = {
   costMultiplier: 1.2,
 };
 
+// Simple audio/visual feedback for purchases
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function playPurchaseSound() {
+  if (audioCtx.state === "suspended") {
+    audioCtx.resume();
+  }
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = "square";
+  osc.frequency.value = 880;
+  gain.gain.value = 0.1;
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.1);
+}
+
+function flashElement(el) {
+  if (!el) return;
+  el.classList.add("purchase-flash");
+  setTimeout(() => el.classList.remove("purchase-flash"), 500);
+}
+
 // ***** UTILITY FUNCTIONS *****
 
 /**
@@ -116,22 +140,19 @@ function initAgeUI(ageKey) {
     const cost = getFactoryCost(factory);
     // Display production in gold per hour (gph) rather than per minute.
     const gph = factory.baseGpm * 60;
-    // Determine which icon to display based on the age.  Stone uses a club,
-    // bronze uses a sword and iron uses a cannon.  Icons reside in the
-    // /images directory.
-    let iconFile = "club.png";
-    if (ageKey === "bronze") iconFile = "sword.png";
-    if (ageKey === "iron") iconFile = "cannon.png";
+    div.setAttribute(
+      "title",
+      `Each ${factory.name} factory produces $${gph.toLocaleString()}/hr. Every 25 owned doubles output.`
+    );
     div.innerHTML = `
-      <img class="factory-icon" src="images/${iconFile}" alt="${factory.name} icon">
       <h3>${factory.name} Factory</h3>
       <p id="${ageKey}-${key}-info">Produces $${gph.toLocaleString()}/hr each</p>
       <p id="${ageKey}-${key}-owned" style="display:none;">Owned: <span id="${ageKey}-${key}-count">0</span></p>
       <button id="buy-${ageKey}-${key}">Buy ${factory.name} Factory ($${cost.toLocaleString()})</button>
     `;
     container.appendChild(div);
-    // Attach click handler
-    document.getElementById(`buy-${ageKey}-${key}`).addEventListener("click", () => buyFactory(ageKey, key));
+    const btn = div.querySelector("button");
+    btn.addEventListener("click", () => buyFactory(ageKey, key, div));
   }
 }
 
@@ -148,6 +169,7 @@ function updateFactoriesUI() {
       const ownedElem = document.getElementById(`${ageKey}-${key}-owned`);
       const countElem = document.getElementById(`${ageKey}-${key}-count`);
       const buyBtn = document.getElementById(`buy-${ageKey}-${key}`);
+      const card = document.getElementById(`${ageKey}-${key}-card`);
 
       const effectiveGpm = getEffectiveGpm(f);
       const effectiveGph = effectiveGpm * 60;
@@ -165,6 +187,12 @@ function updateFactoriesUI() {
       if (buyBtn) {
         buyBtn.textContent = `Buy ${f.name} Factory ($${getFactoryCost(f).toLocaleString()})`;
       }
+
+      if (card) {
+        const remainder = f.owned % 25;
+        const nextBonus = remainder === 0 ? 25 : 25 - remainder;
+        card.title = `Each ${f.name} factory produces $${effectiveGph.toLocaleString()}/hr. Owned: ${f.owned}. ${nextBonus} until next bonus.`;
+      }
     }
   }
 }
@@ -172,13 +200,15 @@ function updateFactoriesUI() {
 /**
  * Purchase a factory for a given age.
  */
-function buyFactory(ageKey, factoryKey) {
+function buyFactory(ageKey, factoryKey, cardElement) {
   const factory = ages[ageKey].factories[factoryKey];
   const cost = getFactoryCost(factory);
   if (gameState.money >= cost) {
     gameState.money -= cost;
     factory.owned += 1;
     updateFactoriesUI();
+    playPurchaseSound();
+    flashElement(cardElement);
   }
 }
 

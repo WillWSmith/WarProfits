@@ -100,13 +100,12 @@ main {
   color: #e9e9ee;
 }
 
-/* Icons for factories */
-.factory-icon {
-  display: block;
-  margin: 0 auto 8px;
-  width: 60px;
-  height: 60px;
-  object-fit: contain;
+/* Icons next to age headings */
+.age-icon {
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
+  vertical-align: middle;
 }
 
 button {
@@ -168,14 +167,30 @@ footer {
 
 /* Icons in status bar and research */
 .status-icon {
-  width: 20px;
-  height: 20px;
+  width: 32px;
+  height: 32px;
   margin-right: 8px;
 }
 
 .research-icon {
-  width: 32px;
-  height: 32px;
-  display: block;
-  margin: 0 auto 8px;
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+/* Flash effect when purchasing a factory */
+.factory-card.purchase-flash {
+  animation: purchaseFlash 0.5s ease;
+}
+
+@keyframes purchaseFlash {
+  from {
+    box-shadow: 0 0 10px #fff;
+    transform: scale(1.05);
+  }
+  to {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.6);
+    transform: scale(1);
+  }
 }
