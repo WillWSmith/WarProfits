@@ -6,7 +6,7 @@
  * factories.  Players hire scientists to progress through research tasks
  * that unlock the next age.  Costs scale exponentially with the number
  * owned, while factory output receives milestone bonuses every 25
- * purchases.
+ * purchases, following common balance patterns in incremental games【922296306697143†L53-L61】.
  */
 
 // ***** AGE & FACTORY DEFINITIONS *****
@@ -18,7 +18,15 @@ const ages = {
   stone: {
     name: "Stone Age",
     factories: {
-      club:    { name: "Wood Club",          baseGpm: 60,     baseCost: 50,      multiplier: 1.15, owned: 0 },
+      /**
+       * Each factory defines its base gold per minute (gpm), base cost, cost
+       * multiplier and the number owned.  To improve the initial game
+       * experience we start the player with one Wood Club factory.  Without
+       * this starter factory players would have zero income and no way to
+       * progress.  Giving one factory provides an immediate trickle of
+       * income while still encouraging players to purchase more factories.
+       */
+      club:    { name: "Wood Club",          baseGpm: 60,     baseCost: 50,      multiplier: 1.15, owned: 1 },
       spear:   { name: "Stone Spear",         baseGpm: 180,    baseCost: 100,     multiplier: 1.15, owned: 0 },
       sling:   { name: "Sling",               baseGpm: 400,    baseCost: 300,     multiplier: 1.15, owned: 0 },
       bow:     { name: "Bow & Stone Arrows",  baseGpm: 600,    baseCost: 600,     multiplier: 1.15, owned: 0 },
@@ -75,7 +83,7 @@ const scientists = {
 
 /**
  * Calculate the cost of the next purchase of a factory.
- * Costs grow exponentially: baseCost × multiplier^owned.
+ * Costs grow exponentially: baseCost × multiplier^owned【922296306697143†L53-L60】.
  */
 function getFactoryCost(factory) {
   return Math.floor(factory.baseCost * Math.pow(factory.multiplier, factory.owned));
@@ -106,9 +114,18 @@ function initAgeUI(ageKey) {
     div.id = `${ageKey}-${key}-card`;
 
     const cost = getFactoryCost(factory);
+    // Display production in gold per hour (gph) rather than per minute.
+    const gph = factory.baseGpm * 60;
+    // Determine which icon to display based on the age.  Stone uses a club,
+    // bronze uses a sword and iron uses a cannon.  Icons reside in the
+    // /images directory.
+    let iconFile = "club.png";
+    if (ageKey === "bronze") iconFile = "sword.png";
+    if (ageKey === "iron") iconFile = "cannon.png";
     div.innerHTML = `
+      <img class="factory-icon" src="images/${iconFile}" alt="${factory.name} icon">
       <h3>${factory.name} Factory</h3>
-      <p id="${ageKey}-${key}-info">Produces $${factory.baseGpm.toLocaleString()}/min each</p>
+      <p id="${ageKey}-${key}-info">Produces $${gph.toLocaleString()}/hr each</p>
       <p id="${ageKey}-${key}-owned" style="display:none;">Owned: <span id="${ageKey}-${key}-count">0</span></p>
       <button id="buy-${ageKey}-${key}">Buy ${factory.name} Factory ($${cost.toLocaleString()})</button>
     `;
@@ -133,12 +150,15 @@ function updateFactoriesUI() {
       const buyBtn = document.getElementById(`buy-${ageKey}-${key}`);
 
       const effectiveGpm = getEffectiveGpm(f);
+      const effectiveGph = effectiveGpm * 60;
       if (f.owned > 0) {
-        info.textContent = `Producing $${(f.owned * effectiveGpm).toLocaleString()}/min total`;
+        // Show production per hour for owned factories
+        info.textContent = `Producing $${(f.owned * effectiveGph).toLocaleString()}/hr total`;
         ownedElem.style.display = "block";
         countElem.textContent = f.owned;
       } else {
-        info.textContent = `Produces $${f.baseGpm.toLocaleString()}/min each`;
+        // Show base production per hour when none owned
+        info.textContent = `Produces $${(f.baseGpm * 60).toLocaleString()}/hr each`;
         ownedElem.style.display = "none";
       }
 
@@ -353,6 +373,13 @@ function updateUI() {
 // ***** INITIALIZATION *****
 window.addEventListener("DOMContentLoaded", () => {
   loadGame();
+  // If there is no existing save, ensure the player starts with one Wood Club factory
+  if (!localStorage.getItem("warprofits-standard-save")) {
+    // Guarantee at least one starter factory for initial income
+    if (ages.stone && ages.stone.factories && ages.stone.factories.club) {
+      ages.stone.factories.club.owned = 1;
+    }
+  }
 
   // Initialize UI for each unlocked age
   for (const ageKey in ages) {
