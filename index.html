@@ -2,25 +2,52 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>WarProfits</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WarProfits Standard Edition</title>
+  <!-- Import a pixel‑style font to evoke a retro game aesthetic -->
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h1>💰 WarProfits</h1>
-  <p>Money: $<span id="money">0</span></p>
+  <header>
+    <h1>WarProfits: Standard Edition</h1>
+    <p class="subtitle">Build your empire through the ages</p>
+  </header>
 
-  <h2>Prehistoric Age</h2>
-  <div id="factories-container"></div>
+  <main>
+    <section id="stone-age-section" class="age-section">
+      <h2>Stone Age</h2>
+      <div id="stone-factories-container" class="factories-container"></div>
+    </section>
 
-  <br />
-  <button id="saveButton">Save Game</button>
-  <div id="saveNotice" style="display:none;">Game Saved!</div>
-  
-<h2>Research Lab</h2>
-<p id="researchProgress">Progress: 0%</p>
-<p id="scientistCount">Scientists: 0</p>
-<button id="buyScientist">Hire Scientist ($1000)</button>
+    <section id="bronze-age-section" class="age-section" style="display: none;">
+      <h2>Bronze Age</h2>
+      <div id="bronze-factories-container" class="factories-container"></div>
+    </section>
+
+    <section id="iron-age-section" class="age-section" style="display: none;">
+      <h2>Iron Age</h2>
+      <div id="iron-factories-container" class="factories-container"></div>
+    </section>
+
+    <div class="status-bar">
+      <p>Money: $<span id="money">0</span></p>
+      <button id="saveButton">Save Game</button>
+      <div id="saveNotice" style="display: none;">Game Saved!</div>
+    </div>
+
+    <section class="research-section">
+      <h2>Research Lab</h2>
+      <p id="researchTask">Research: Unlock Bronze Age</p>
+      <p id="researchProgress">Progress: 0%</p>
+      <p id="scientistCount">Scientists: 0</p>
+      <button id="buyScientist">Hire Scientist ($1,000)</button>
+    </section>
+  </main>
+
+  <footer>
+    <p>Made for fun — scale through history and earn your war profits!</p>
+  </footer>
 
   <script src="script.js"></script>
 </body>
