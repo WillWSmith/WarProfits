@@ -80,21 +80,11 @@ const scientists = {
 };
 
 // Simple audio/visual feedback for purchases
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const purchaseAudio = new Audio("sounds/ka-ching.mp3");
 
 function playPurchaseSound() {
-  if (audioCtx.state === "suspended") {
-    audioCtx.resume();
-  }
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  osc.type = "square";
-  osc.frequency.value = 880;
-  gain.gain.value = 0.1;
-  osc.connect(gain);
-  gain.connect(audioCtx.destination);
-  osc.start();
-  osc.stop(audioCtx.currentTime + 0.1);
+  purchaseAudio.currentTime = 0;
+  purchaseAudio.play();
 }
 
 function flashElement(el) {
@@ -140,15 +130,16 @@ function initAgeUI(ageKey) {
     const cost = getFactoryCost(factory);
     // Display production in gold per hour (gph) rather than per minute.
     const gph = factory.baseGpm * 60;
+    const effectiveGph = getEffectiveGpm(factory) * 60;
+    const output = factory.owned > 0 ? factory.owned * effectiveGph : gph;
     div.setAttribute(
       "title",
       `Each ${factory.name} factory produces $${gph.toLocaleString()}/hr. Every 25 owned doubles output.`
     );
     div.innerHTML = `
-      <h3>${factory.name} Factory</h3>
-      <p id="${ageKey}-${key}-info">Produces $${gph.toLocaleString()}/hr each</p>
-      <p id="${ageKey}-${key}-owned">Owned: <span id="${ageKey}-${key}-count">${factory.owned}</span></p>
-      <button id="buy-${ageKey}-${key}">Buy ${factory.name} Factory ($${cost.toLocaleString()})</button>
+      <h3>${factory.name}</h3>
+      <p id="${ageKey}-${key}-info">${factory.owned} owned — +$${output.toLocaleString()}/hr${factory.owned === 0 ? " each" : ""}</p>
+      <button id="buy-${ageKey}-${key}">Buy ($${cost.toLocaleString()})</button>
     `;
     container.appendChild(div);
     const btn = div.querySelector("button");
@@ -166,29 +157,23 @@ function updateFactoriesUI() {
     for (const key in age.factories) {
       const f = age.factories[key];
       const info = document.getElementById(`${ageKey}-${key}-info`);
-      const countElem = document.getElementById(`${ageKey}-${key}-count`);
       const buyBtn = document.getElementById(`buy-${ageKey}-${key}`);
       const card = document.getElementById(`${ageKey}-${key}-card`);
 
       const effectiveGpm = getEffectiveGpm(f);
       const effectiveGph = effectiveGpm * 60;
-      countElem.textContent = f.owned;
-      if (f.owned > 0) {
-        // Show production per hour for owned factories
-        info.textContent = `Producing $${(f.owned * effectiveGph).toLocaleString()}/hr total`;
-      } else {
-        // Show base production per hour when none owned
-        info.textContent = `Produces $${(f.baseGpm * 60).toLocaleString()}/hr each`;
-      }
+      const baseGph = f.baseGpm * 60;
+      const rate = f.owned > 0 ? f.owned * effectiveGph : baseGph;
+      info.textContent = `${f.owned} owned — +$${rate.toLocaleString()}/hr${f.owned === 0 ? ' each' : ''}`;
 
       if (buyBtn) {
-        buyBtn.textContent = `Buy ${f.name} Factory ($${getFactoryCost(f).toLocaleString()})`;
+        buyBtn.textContent = `Buy ($${getFactoryCost(f).toLocaleString()})`;
       }
 
       if (card) {
         const remainder = f.owned % 25;
         const nextBonus = remainder === 0 ? 25 : 25 - remainder;
-        card.title = `Each ${f.name} factory produces $${effectiveGph.toLocaleString()}/hr. Owned: ${f.owned}. ${nextBonus} until next bonus.`;
+        card.title = `Each ${f.name} factory produces $${effectiveGph.toLocaleString()}/hr. ${f.owned} owned. ${nextBonus} until next bonus.`;
       }
     }
   }
