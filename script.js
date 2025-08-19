@@ -1,202 +1,376 @@
-// Factory definitions with name, gold per minute (gpm), icon, owned count, base cost, and cost multiplier
-const factories = {
-  club:  { name: "Wood Club",          gpm: 60,  icon: "🪵", owned: 0, baseCost: 50,   multiplier: 1.15 },  // Fixed cost from 0 to 50
-  spear: { name: "Stone Spear",        gpm: 180, icon: "🪨", owned: 0, baseCost: 100,  multiplier: 1.15 },
-  sling: { name: "Sling",              gpm: 400, icon: "🥎", owned: 0, baseCost: 300,  multiplier: 1.15 },
-  bow:   { name: "Bow & Stone Arrows",gpm: 600, icon: "🏹", owned: 0, baseCost: 600,  multiplier: 1.15 },
+/*
+ * WarProfits Standard Edition
+ *
+ * This version expands the original prototype into a richer idle game with
+ * three ages—Stone, Bronze and Iron—each containing its own set of
+ * factories.  Players hire scientists to progress through research tasks
+ * that unlock the next age.  Costs scale exponentially with the number
+ * owned, while factory output receives milestone bonuses every 25
+ * purchases.
+ */
+
+// ***** AGE & FACTORY DEFINITIONS *****
+
+// Define all ages with their factories.  Each factory defines a base gold per
+// minute (gpm), a base cost and a cost multiplier.  New ages have higher
+// multipliers to make late‑game purchases more expensive.
+const ages = {
+  stone: {
+    name: "Stone Age",
+    factories: {
+      club:    { name: "Wood Club",          baseGpm: 60,     baseCost: 50,      multiplier: 1.15, owned: 0 },
+      spear:   { name: "Stone Spear",         baseGpm: 180,    baseCost: 100,     multiplier: 1.15, owned: 0 },
+      sling:   { name: "Sling",               baseGpm: 400,    baseCost: 300,     multiplier: 1.15, owned: 0 },
+      bow:     { name: "Bow & Stone Arrows",  baseGpm: 600,    baseCost: 600,     multiplier: 1.15, owned: 0 },
+    },
+  },
+  bronze: {
+    name: "Bronze Age",
+    factories: {
+      bronzeSword: { name: "Bronze Sword", baseGpm: 4000, baseCost: 3000, multiplier: 1.18, owned: 0 },
+      bronzeSpear: { name: "Bronze Spear", baseGpm: 10000, baseCost: 8000, multiplier: 1.18, owned: 0 },
+      bronzeAxe:   { name: "Bronze Axe",   baseGpm: 25000, baseCost: 20000, multiplier: 1.18, owned: 0 },
+    },
+  },
+  iron: {
+    name: "Iron Age",
+    factories: {
+      ironSword:  { name: "Iron Sword",   baseGpm: 400000,  baseCost: 300000,  multiplier: 1.22, owned: 0 },
+      ironSpear:  { name: "Iron Spear",   baseGpm: 1000000, baseCost: 800000,  multiplier: 1.22, owned: 0 },
+      ironCrossbow:{ name: "Iron Crossbow", baseGpm: 2500000, baseCost: 2000000, multiplier: 1.22, owned: 0 },
+      ironCannon: { name: "Iron Cannon",  baseGpm: 6000000, baseCost: 5000000, multiplier: 1.22, owned: 0 },
+    },
+  },
 };
 
-// Game state object holds current money and last update timestamp
+// Keep track of which ages are unlocked (stone is always unlocked)
+const agesUnlocked = {
+  stone: true,
+  bronze: false,
+  iron: false,
+};
+
+// Research tasks queue.  Each task unlocks the corresponding age.
+const researchTasks = [
+  { name: "Unlock Bronze Age", ageKey: "bronze", required: 10000, unlocked: false },
+  { name: "Unlock Iron Age",   ageKey: "iron",   required: 200000, unlocked: false },
+];
+
+let currentResearchIndex = 0;
+
+// Global game state
 let gameState = {
   money: 0,
   lastUpdate: Date.now(),
 };
 
-// Calculate cost for buying the next factory of the given type
-function getFactoryCost(key) {
-  const factory = factories[key];
+// Scientist data
+const scientists = {
+  count: 0,
+  baseCost: 1000,
+  costMultiplier: 1.2,
+};
+
+// ***** UTILITY FUNCTIONS *****
+
+/**
+ * Calculate the cost of the next purchase of a factory.
+ * Costs grow exponentially: baseCost × multiplier^owned.
+ */
+function getFactoryCost(factory) {
   return Math.floor(factory.baseCost * Math.pow(factory.multiplier, factory.owned));
 }
 
-// Initialize factories UI, create buttons and info for each factory
-function initFactoriesUI() {
-  const container = document.getElementById("factories-container");
-  container.innerHTML = ""; // Clear previous content
+/**
+ * Determine the effective GPM for a factory with milestone bonuses.
+ * Every 25 factories owned doubles the base GPM.
+ */
+function getEffectiveGpm(factory) {
+  const milestones = Math.floor(factory.owned / 25);
+  return factory.baseGpm * Math.pow(2, milestones);
+}
 
-  for (const key in factories) {
-    const factory = factories[key];
+/**
+ * Initialize factory UI for a specific age.  Creates cards and attaches buy
+ * listeners.  This is called when the page loads and when new ages are
+ * unlocked.
+ */
+function initAgeUI(ageKey) {
+  const age = ages[ageKey];
+  const container = document.getElementById(`${ageKey}-factories-container`);
+  container.innerHTML = "";
+  for (const key in age.factories) {
+    const factory = age.factories[key];
     const div = document.createElement("div");
-    div.id = `factory-${key}`;
+    div.classList.add("factory-card");
+    div.id = `${ageKey}-${key}-card`;
+
+    const cost = getFactoryCost(factory);
     div.innerHTML = `
-      <h3>${factory.icon} ${factory.name} Factory</h3>
-      <p id="info-${key}">Produces $${factory.gpm}/min each</p>
-      <p id="owned-${key}" style="display:none;">Owned: <span id="count-${key}">0</span></p>
-      <button id="buy-${key}">Buy ${factory.name} Factory ($${getFactoryCost(key)})</button>
+      <h3>${factory.name} Factory</h3>
+      <p id="${ageKey}-${key}-info">Produces $${factory.baseGpm.toLocaleString()}/min each</p>
+      <p id="${ageKey}-${key}-owned" style="display:none;">Owned: <span id="${ageKey}-${key}-count">0</span></p>
+      <button id="buy-${ageKey}-${key}">Buy ${factory.name} Factory ($${cost.toLocaleString()})</button>
     `;
     container.appendChild(div);
-
-    // Add click event listener to buy button
-    document.getElementById(`buy-${key}`).addEventListener("click", () => buyFactory(key));
+    // Attach click handler
+    document.getElementById(`buy-${ageKey}-${key}`).addEventListener("click", () => buyFactory(ageKey, key));
   }
 }
 
-// Update the UI: money, factories info, owned counts, and buttons
-function updateUI() {
-  // Update total money display (rounded down)
-  document.getElementById("money").textContent = Math.floor(gameState.money);
+/**
+ * Update factory UI for all ages.
+ */
+function updateFactoriesUI() {
+  for (const ageKey in ages) {
+    if (!agesUnlocked[ageKey]) continue;
+    const age = ages[ageKey];
+    for (const key in age.factories) {
+      const f = age.factories[key];
+      const info = document.getElementById(`${ageKey}-${key}-info`);
+      const ownedElem = document.getElementById(`${ageKey}-${key}-owned`);
+      const countElem = document.getElementById(`${ageKey}-${key}-count`);
+      const buyBtn = document.getElementById(`buy-${ageKey}-${key}`);
 
-  // Update each factory's info, owned count, and buy button text
-  for (const key in factories) {
-    const f = factories[key];
-    const owned = f.owned;
-    const info = document.getElementById(`info-${key}`);
-    const ownedElem = document.getElementById(`owned-${key}`);
-    const count = document.getElementById(`count-${key}`);
-    const buyButton = document.getElementById(`buy-${key}`);
+      const effectiveGpm = getEffectiveGpm(f);
+      if (f.owned > 0) {
+        info.textContent = `Producing $${(f.owned * effectiveGpm).toLocaleString()}/min total`;
+        ownedElem.style.display = "block";
+        countElem.textContent = f.owned;
+      } else {
+        info.textContent = `Produces $${f.baseGpm.toLocaleString()}/min each`;
+        ownedElem.style.display = "none";
+      }
 
-    if (owned > 0) {
-      info.textContent = `Producing $${owned * f.gpm}/min total`;
-      ownedElem.style.display = "block";
-      count.textContent = owned;
-    } else {
-      info.textContent = `Produces $${f.gpm}/min each`;
-      ownedElem.style.display = "none";
-    }
-
-    if (buyButton) {
-      buyButton.textContent = `Buy ${f.name} Factory ($${getFactoryCost(key)})`;
+      if (buyBtn) {
+        buyBtn.textContent = `Buy ${f.name} Factory ($${getFactoryCost(f).toLocaleString()})`;
+      }
     }
   }
-
-  // Update scientist hire button with current cost
-  const nextCost = Math.floor(
-    research.scientists.baseCost * Math.pow(research.scientists.costMultiplier, research.scientists.count)
-  );
-  document.getElementById("buyScientist").textContent = `Hire Scientist ($${nextCost})`;
-
-  // Update research progress UI
-  updateResearchUI();
 }
 
-// Update research progress and scientist count display
+/**
+ * Purchase a factory for a given age.
+ */
+function buyFactory(ageKey, factoryKey) {
+  const factory = ages[ageKey].factories[factoryKey];
+  const cost = getFactoryCost(factory);
+  if (gameState.money >= cost) {
+    gameState.money -= cost;
+    factory.owned += 1;
+    updateFactoriesUI();
+  }
+}
+
+/**
+ * Calculate total income per second from all unlocked ages.
+ */
+function calculateIncomePerSecond() {
+  let gps = 0;
+  for (const ageKey in ages) {
+    if (!agesUnlocked[ageKey]) continue;
+    const age = ages[ageKey];
+    for (const key in age.factories) {
+      const f = age.factories[key];
+      gps += (f.owned * getEffectiveGpm(f)) / 60;
+    }
+  }
+  return gps;
+}
+
+/**
+ * Update research progress.  Uses diminishing returns via log2(scientists+1).
+ * When current research completes, unlocks the next age and advances to the
+ * next research task.
+ */
+function updateResearch(elapsed) {
+  const task = researchTasks[currentResearchIndex];
+  if (!task) return; // no more research
+  // If already unlocked, skip
+  if (task.unlocked) return;
+  const rate = Math.log2(scientists.count + 1);
+  task.progress = (task.progress || 0) + rate * elapsed;
+  if (task.progress >= task.required) {
+    task.unlocked = true;
+    unlockAge(task.ageKey);
+    currentResearchIndex += 1;
+    // Update research task display
+    updateResearchUI();
+    alert(`${ages[task.ageKey].name} Unlocked!`);
+  }
+}
+
+/**
+ * Unlock an age: reveal its section and initialize its UI.
+ */
+function unlockAge(ageKey) {
+  if (!agesUnlocked[ageKey]) {
+    agesUnlocked[ageKey] = true;
+    const section = document.getElementById(`${ageKey}-age-section`);
+    if (section) section.style.display = "block";
+    initAgeUI(ageKey);
+    updateFactoriesUI();
+  }
+}
+
+/**
+ * Update research UI elements: name, progress, scientists.
+ */
 function updateResearchUI() {
-  document.getElementById("researchProgress").textContent =
-    `Progress: ${Math.min(100, (research.current.progress / research.current.required * 100)).toFixed(2)}%`;
-  document.getElementById("scientistCount").textContent =
-    `Scientists: ${research.scientists.count}`;
+  const task = researchTasks[currentResearchIndex];
+  const taskElem = document.getElementById("researchTask");
+  const progressElem = document.getElementById("researchProgress");
+  const scientistElem = document.getElementById("scientistCount");
+
+  if (task) {
+    const progressPercent = Math.min(100, ((task.progress || 0) / task.required) * 100);
+    taskElem.textContent = `Research: ${task.name}`;
+    progressElem.textContent = `Progress: ${progressPercent.toFixed(2)}%`;
+  } else {
+    taskElem.textContent = "All research completed";
+    progressElem.textContent = "Progress: 100%";
+  }
+  scientistElem.textContent = `Scientists: ${scientists.count}`;
+
+  // Update buy button cost
+  const cost = Math.floor(scientists.baseCost * Math.pow(scientists.costMultiplier, scientists.count));
+  document.getElementById("buyScientist").textContent = `Hire Scientist ($${cost.toLocaleString()})`;
 }
 
-// Buy a factory if enough money; deduct cost, increase owned count, update UI
-function buyFactory(key) {
-  const cost = getFactoryCost(key);
+/**
+ * Hire a scientist if enough money is available.
+ */
+function hireScientist() {
+  const cost = Math.floor(scientists.baseCost * Math.pow(scientists.costMultiplier, scientists.count));
   if (gameState.money >= cost) {
     gameState.money -= cost;
-    factories[key].owned += 1;
-    updateUI();
+    scientists.count += 1;
+    updateResearchUI();
   }
 }
 
-// Research system state with current research and scientists count/cost
-const research = {
-  current: {
-    name: "Unlock Bronze Age",
-    progress: 0,     // research progress points
-    required: 1000,  // points needed to unlock
-    unlocked: false,
-  },
-  scientists: {
-    count: 0,
-    baseCost: 1000,
-    costMultiplier: 1.15,
+/**
+ * Save the game state to localStorage.
+ */
+function saveGame() {
+  const data = {
+    money: gameState.money,
+    lastUpdate: Date.now(),
+    scientists: scientists.count,
+    agesUnlocked,
+    ageFactories: {},
+    researchIndex: currentResearchIndex,
+    researchProgress: {},
+  };
+  // Save factory counts per age
+  for (const ageKey in ages) {
+    data.ageFactories[ageKey] = {};
+    for (const key in ages[ageKey].factories) {
+      data.ageFactories[ageKey][key] = ages[ageKey].factories[key].owned;
+    }
   }
-};
+  // Save research progress for each task
+  researchTasks.forEach((task, idx) => {
+    data.researchProgress[idx] = task.progress || 0;
+    data[`taskUnlocked_${idx}`] = task.unlocked;
+  });
+  localStorage.setItem("warprofits-standard-save", JSON.stringify(data));
+  showSaveNotice();
+}
 
-// Update research progress based on elapsed seconds and scientist count with diminishing returns
-function updateResearch(elapsedSeconds) {
-  if (research.current.unlocked) return;
-
-  const baseRate = 1; // base research points per second
-  const scientists = research.scientists.count;
-  const progressRate = baseRate * Math.log2(scientists + 1); // diminishing returns on scientists
-
-  research.current.progress += progressRate * elapsedSeconds;
-
-  if (research.current.progress >= research.current.required) {
-    research.current.unlocked = true;
-    alert("🎉 Bronze Age Unlocked!");
+/**
+ * Load the game state from localStorage.
+ */
+function loadGame() {
+  const saved = localStorage.getItem("warprofits-standard-save");
+  if (!saved) return;
+  try {
+    const data = JSON.parse(saved);
+    gameState.money = data.money || 0;
+    gameState.lastUpdate = data.lastUpdate || Date.now();
+    scientists.count = data.scientists || 0;
+    // Restore unlocked ages
+    for (const ageKey in agesUnlocked) {
+      agesUnlocked[ageKey] = data.agesUnlocked ? data.agesUnlocked[ageKey] : (ageKey === "stone");
+    }
+    // Restore factory counts
+    for (const ageKey in data.ageFactories) {
+      for (const key in data.ageFactories[ageKey]) {
+        if (ages[ageKey] && ages[ageKey].factories[key] !== undefined) {
+          ages[ageKey].factories[key].owned = data.ageFactories[ageKey][key];
+        }
+      }
+    }
+    // Restore research index and progress
+    currentResearchIndex = data.researchIndex || 0;
+    researchTasks.forEach((task, idx) => {
+      task.progress = data.researchProgress ? data.researchProgress[idx] : 0;
+      task.unlocked = data[`taskUnlocked_${idx}`] || false;
+    });
+  } catch (e) {
+    console.error("Failed to load save:", e);
   }
 }
 
-// Buy a scientist if enough money; deduct cost, increase count, update UI
-function buyScientist() {
-  const cost = Math.floor(research.scientists.baseCost * Math.pow(research.scientists.costMultiplier, research.scientists.count));
-  if (gameState.money >= cost) {
-    gameState.money -= cost;
-    research.scientists.count += 1;
-    updateUI();
-  }
+/**
+ * Show a temporary save notice.
+ */
+function showSaveNotice() {
+  const notice = document.getElementById("saveNotice");
+  notice.style.display = "block";
+  notice.style.opacity = "1";
+  setTimeout(() => (notice.style.opacity = "0"), 2000);
+  setTimeout(() => (notice.style.display = "none"), 3000);
 }
 
-// Main game loop: calculates income, updates money, research, and UI every second
+/**
+ * Main game loop: update money, research progress and UI.
+ */
 function gameLoop() {
   const now = Date.now();
   const elapsed = (now - gameState.lastUpdate) / 1000;
   gameState.lastUpdate = now;
 
-  let incomePerSec = 0;
-  for (const key in factories) {
-    incomePerSec += (factories[key].owned * factories[key].gpm) / 60; // convert gpm to gps
-  }
+  const income = calculateIncomePerSecond();
+  gameState.money += income * elapsed;
 
-  gameState.money += incomePerSec * elapsed;
+  // Update research
   updateResearch(elapsed);
+
+  // Update UI elements
   updateUI();
 }
 
-// Save game state to localStorage
-function saveGame() {
-  const saveData = {
-    money: gameState.money,
-    lastUpdate: Date.now(),
-  };
-  for (const key in factories) {
-    saveData[key + "Factories"] = factories[key].owned;
-  }
-  localStorage.setItem("warprofits-save", JSON.stringify(saveData));
-  showSaveNotice();
+/**
+ * Update money display, factories and research UI.
+ */
+function updateUI() {
+  document.getElementById("money").textContent = Math.floor(gameState.money).toLocaleString();
+  updateFactoriesUI();
+  updateResearchUI();
 }
 
-// Load game state from localStorage
-function loadGame() {
-  const saved = localStorage.getItem("warprofits-save");
-  if (saved) {
-    const data = JSON.parse(saved);
-    gameState.money = data.money || 0;
-    gameState.lastUpdate = data.lastUpdate || Date.now();
-    for (const key in factories) {
-      factories[key].owned = data[key + "Factories"] || 0;
+// ***** INITIALIZATION *****
+window.addEventListener("DOMContentLoaded", () => {
+  loadGame();
+
+  // Initialize UI for each unlocked age
+  for (const ageKey in ages) {
+    if (agesUnlocked[ageKey]) {
+      const section = document.getElementById(`${ageKey}-age-section`);
+      if (section) section.style.display = "block";
+      initAgeUI(ageKey);
     }
   }
-}
+  updateFactoriesUI();
+  updateResearchUI();
+  updateUI();
 
-// Display a temporary save notice on the screen
-function showSaveNotice() {
-  const notice = document.getElementById("saveNotice");
-  notice.style.display = "block";
-  notice.style.opacity = "1";
-  setTimeout(() => notice.style.opacity = "0", 2000);
-  setTimeout(() => notice.style.display = "none", 3000);
-}
+  // Event listeners
+  document.getElementById("buyScientist").addEventListener("click", hireScientist);
+  document.getElementById("saveButton").addEventListener("click", saveGame);
 
-// Event listeners for save button and scientist purchase
-document.getElementById("saveButton").addEventListener("click", saveGame);
-document.getElementById("buyScientist").addEventListener("click", buyScientist);
-
-// Initialize the game on page load
-loadGame();
-initFactoriesUI();
-updateUI();
-
-// Start the main game loop and autosave intervals
-setInterval(gameLoop, 1000);
-setInterval(saveGame, 300000);
+  // Start loops
+  setInterval(gameLoop, 1000);
+  setInterval(saveGame, 300000);
+});
