@@ -90,20 +90,38 @@ const weaponStats = {
   ironCannon: { attack: 120, defense: 30, range: 10 },
 };
 
-// Enemy archetypes for raids
+// Map each weapon to its technology tier so raids pit similar eras
+const weaponTiers = {
+  club: "stone",
+  spear: "stone",
+  sling: "stone",
+  bow: "stone",
+  bronzeSword: "bronze",
+  bronzeSpear: "bronze",
+  bronzeAxe: "bronze",
+  ironSword: "iron",
+  ironSpear: "iron",
+  ironCrossbow: "iron",
+  ironCannon: "iron",
+};
+
+// Enemy archetypes for raids, each aligned with a tech tier
 const enemyTypes = [
   {
     name: "Bandit Horde",
+    tier: "stone",
     wealth: 1.0,
     weaponEffectiveness: { club: 1.2, spear: 1.1, sling: 1.0, bow: 0.8 },
   },
   {
     name: "Mercenary Company",
+    tier: "bronze",
     wealth: 1.5,
-    weaponEffectiveness: { bronzeSword: 1.2, bronzeSpear: 1.1, bow: 1.1, ironSword: 0.9 },
+    weaponEffectiveness: { bronzeSword: 1.2, bronzeSpear: 1.1, bow: 1.1 },
   },
   {
     name: "Royal Guard",
+    tier: "iron",
     wealth: 2.0,
     weaponEffectiveness: { ironSword: 1.2, ironSpear: 1.2, ironCrossbow: 1.3, ironCannon: 1.4 },
   },
@@ -447,12 +465,13 @@ function populateRaidLoadout() {
 }
 
 // Generate a random enemy based on player army size
-function generateEnemy(playerTotal) {
-  const type = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+function generateEnemy(playerTotal, tier) {
+  const candidates = enemyTypes.filter((t) => t.tier === tier);
+  const type = candidates[Math.floor(Math.random() * candidates.length)];
   const ratio = 0.6 + Math.random() * 0.6; // 60% to 120%
   const total = Math.max(1, Math.floor(playerTotal * ratio));
   const army = {};
-  const weaponKeys = Object.keys(weaponStats);
+  const weaponKeys = Object.keys(weaponStats).filter((k) => weaponTiers[k] === tier);
   for (let i = 0; i < total; i++) {
     const w = weaponKeys[Math.floor(Math.random() * weaponKeys.length)];
     army[w] = (army[w] || 0) + 1;
@@ -508,19 +527,39 @@ function startRaid() {
     alert("Select weapons to send on the raid.");
     return;
   }
-  // Deduct weapons
+  // Determine highest tech tier used by the player
+  let playerTier = "stone";
+  for (const key in army) {
+    const tier = weaponTiers[key] || "stone";
+    if (tier === "iron") playerTier = "iron";
+    else if (tier === "bronze" && playerTier === "stone") playerTier = "bronze";
+  }
+  // Deduct weapons sent on the raid
   for (const key in army) {
     weaponInventory[key] -= army[key];
   }
-  const enemy = generateEnemy(total);
+  const enemy = generateEnemy(total, playerTier);
   const result = simulateBattle(army, enemy);
-  // Return surviving weapons
+  // Return surviving weapons exactly distributed
   const survivors = total - result.playerCasualties;
   if (survivors > 0) {
-    for (const key in army) {
-      const proportion = army[key] / total;
-      const survive = Math.round(survivors * proportion);
-      weaponInventory[key] = (weaponInventory[key] || 0) + survive;
+    const keys = Object.keys(army);
+    const survivorDist = {};
+    let remaining = survivors;
+    keys.forEach((key) => {
+      const survive = Math.floor((army[key] / total) * survivors);
+      survivorDist[key] = survive;
+      remaining -= survive;
+    });
+    let idx = 0;
+    while (remaining > 0) {
+      const key = keys[idx % keys.length];
+      survivorDist[key] += 1;
+      remaining--;
+      idx++;
+    }
+    for (const key of keys) {
+      weaponInventory[key] = (weaponInventory[key] || 0) + survivorDist[key];
     }
   }
   if (result.playerWin) {
@@ -544,27 +583,74 @@ function renderBattlefield(playerTotal, playerCas, enemyTotal, enemyCas) {
   const svg = document.getElementById("battlefield");
   if (!svg) return;
   svg.innerHTML = "";
-  const maxWidth = 180;
-  const pRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-  pRect.setAttribute("x", 10);
-  pRect.setAttribute("y", 20);
-  pRect.setAttribute("height", 20);
-  pRect.setAttribute("fill", "#00e6e6");
-  const eRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-  eRect.setAttribute("x", 210);
-  eRect.setAttribute("y", 60);
-  eRect.setAttribute("height", 20);
-  eRect.setAttribute("fill", "#ff0000");
-  svg.appendChild(pRect);
-  svg.appendChild(eRect);
-  pRect.setAttribute("width", maxWidth);
-  eRect.setAttribute("width", maxWidth);
-  const pSurvivorWidth = maxWidth * ((playerTotal - playerCas) / playerTotal);
-  const eSurvivorWidth = maxWidth * ((enemyTotal - enemyCas) / enemyTotal);
+  const totalUnits = playerTotal + enemyTotal;
+  const duration = 5000 + Math.min(5000, totalUnits * 20);
+
+  // Background
+  const bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  bg.setAttribute("x", 0);
+  bg.setAttribute("y", 0);
+  bg.setAttribute("width", 400);
+  bg.setAttribute("height", 100);
+  bg.setAttribute("fill", "#253422");
+  svg.appendChild(bg);
+
+  const playerDisplay = Math.min(10, playerTotal);
+  const enemyDisplay = Math.min(10, enemyTotal);
+  const playerGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  const enemyGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  svg.appendChild(playerGroup);
+  svg.appendChild(enemyGroup);
+
+  for (let i = 0; i < playerDisplay; i++) {
+    const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    const y = 20 + (i % 5) * 15;
+    c.setAttribute("cx", 40 + Math.floor(i / 5) * 10);
+    c.setAttribute("cy", y);
+    c.setAttribute("r", 5);
+    c.setAttribute("class", "soldier player");
+    const anim = document.createElementNS("http://www.w3.org/2000/svg", "animate");
+    anim.setAttribute("attributeName", "cx");
+    anim.setAttribute("from", c.getAttribute("cx"));
+    anim.setAttribute("to", 200 - Math.floor(i / 5) * 10);
+    anim.setAttribute("dur", `${duration}ms`);
+    anim.setAttribute("fill", "freeze");
+    c.appendChild(anim);
+    playerGroup.appendChild(c);
+    anim.beginElement();
+  }
+
+  for (let i = 0; i < enemyDisplay; i++) {
+    const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    const y = 80 - (i % 5) * 15;
+    c.setAttribute("cx", 360 - Math.floor(i / 5) * 10);
+    c.setAttribute("cy", y);
+    c.setAttribute("r", 5);
+    c.setAttribute("class", "soldier enemy");
+    const anim = document.createElementNS("http://www.w3.org/2000/svg", "animate");
+    anim.setAttribute("attributeName", "cx");
+    anim.setAttribute("from", c.getAttribute("cx"));
+    anim.setAttribute("to", 200 + Math.floor(i / 5) * 10);
+    anim.setAttribute("dur", `${duration}ms`);
+    anim.setAttribute("fill", "freeze");
+    c.appendChild(anim);
+    enemyGroup.appendChild(c);
+    anim.beginElement();
+  }
+
+  // After movement, fade out casualties
   setTimeout(() => {
-    pRect.setAttribute("width", pSurvivorWidth);
-    eRect.setAttribute("width", eSurvivorWidth);
-  }, 100);
+    const pLoss = Math.round((playerCas / playerTotal) * playerDisplay);
+    const eLoss = Math.round((enemyCas / enemyTotal) * enemyDisplay);
+    const pSoldiers = Array.from(playerGroup.children);
+    const eSoldiers = Array.from(enemyGroup.children);
+    for (let i = 0; i < pLoss && i < pSoldiers.length; i++) {
+      pSoldiers[i].setAttribute("fill", "#555");
+    }
+    for (let i = 0; i < eLoss && i < eSoldiers.length; i++) {
+      eSoldiers[i].setAttribute("fill", "#555");
+    }
+  }, duration);
 }
 
 /**

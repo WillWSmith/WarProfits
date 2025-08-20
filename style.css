@@ -168,8 +168,15 @@ button {
   background: #111;
 }
 
-#battlefield rect {
-  transition: width 1s ease;
+.soldier {
+  stroke: #000;
+  stroke-width: 1;
+}
+.soldier.player {
+  fill: #00e6e6;
+}
+.soldier.enemy {
+  fill: #ff0000;
 }
 
 button:hover {
