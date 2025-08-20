@@ -179,6 +179,21 @@ button {
   fill: #ff0000;
 }
 
+.battle-result {
+  text-align: center;
+  margin-top: 10px;
+}
+.battle-result svg {
+  display: block;
+  margin: 0 auto 10px;
+}
+.battle-result.victory {
+  color: #0f0;
+}
+.battle-result.defeat {
+  color: #f00;
+}
+
 button:hover {
   background: #00e6e6;
   color: #0e163d;

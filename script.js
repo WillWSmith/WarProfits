@@ -127,6 +127,13 @@ const enemyTypes = [
   },
 ];
 
+const outcomeSVGs = {
+  completeVictory: `<svg width="80" height="50"><polygon points="40,5 47,32 75,32 52,47 60,75 40,58 20,75 28,47 5,32 33,32" fill="#ffd700"/></svg>`,
+  victory: `<svg width="80" height="50"><polyline points="10,25 30,40 70,10" stroke="#0f0" stroke-width="8" fill="none"/></svg>`,
+  loss: `<svg width="80" height="50"><line x1="10" y1="10" x2="70" y2="40" stroke="#f00" stroke-width="8"/><line x1="70" y1="10" x2="10" y2="40" stroke="#f00" stroke-width="8"/></svg>`,
+  completeLoss: `<svg width="80" height="50"><circle cx="40" cy="25" r="24" stroke="#f00" stroke-width="6" fill="none"/><line x1="15" y1="10" x2="65" y2="40" stroke="#f00" stroke-width="6"/><line x1="65" y1="10" x2="15" y2="40" stroke="#f00" stroke-width="6"/></svg>`
+};
+
 // Siege mission state
 let siegeMission = {
   active: false,
@@ -436,6 +443,10 @@ function showRaidModal() {
     if (resultDiv) resultDiv.innerHTML = "";
     const svg = document.getElementById("battlefield");
     if (svg) svg.innerHTML = "";
+    const loadout = document.getElementById("raidLoadout");
+    const sendBtn = document.getElementById("sendRaid");
+    if (loadout) loadout.style.display = "block";
+    if (sendBtn) sendBtn.style.display = "inline-block";
   }
 }
 
@@ -566,25 +577,41 @@ function startRaid() {
     gameState.money += result.reward;
   }
   updateUI();
-  showRaidResult(result, total, enemy);
+  const loadout = document.getElementById("raidLoadout");
+  const sendBtn = document.getElementById("sendRaid");
+  const output = document.getElementById("raidResult");
+  if (loadout) loadout.style.display = "none";
+  if (sendBtn) sendBtn.style.display = "none";
+  if (output) output.innerHTML = "";
+  renderBattlefield(total, result.playerCasualties, result.enemyTotal, result.enemyCasualties, () => {
+    showRaidResult(result, total, enemy);
+  });
 }
 
 function showRaidResult(result, playerTotal, enemy) {
   const output = document.getElementById("raidResult");
   if (!output) return;
-  output.innerHTML = `<p>Enemy: ${result.enemyType}</p>` +
-    `<p>${result.playerWin ? "Victory" : "Defeat"}! Reward: $${result.reward}</p>` +
+  const outcome = getOutcomeType(result, playerTotal);
+  output.innerHTML = `<div class="battle-result ${result.playerWin ? "victory" : "defeat"}">` +
+    `${outcomeSVGs[outcome]}` +
+    `<h3>${result.playerWin ? "Victory" : "Defeat"}</h3>` +
+    `<p>Enemy: ${result.enemyType}</p>` +
+    `<p>Reward: $${result.reward}</p>` +
     `<p>Your losses: ${result.playerCasualties} / ${playerTotal}</p>` +
-    `<p>Enemy losses: ${result.enemyCasualties} / ${result.enemyTotal}</p>`;
-  renderBattlefield(playerTotal, result.playerCasualties, result.enemyTotal, result.enemyCasualties);
+    `<p>Enemy losses: ${result.enemyCasualties} / ${result.enemyTotal}</p>` +
+    `</div>`;
+  const loadout = document.getElementById("raidLoadout");
+  const sendBtn = document.getElementById("sendRaid");
+  if (loadout) loadout.style.display = "block";
+  if (sendBtn) sendBtn.style.display = "inline-block";
+  populateRaidLoadout();
 }
 
-function renderBattlefield(playerTotal, playerCas, enemyTotal, enemyCas) {
+function renderBattlefield(playerTotal, playerCas, enemyTotal, enemyCas, callback) {
   const svg = document.getElementById("battlefield");
   if (!svg) return;
   svg.innerHTML = "";
-  const totalUnits = playerTotal + enemyTotal;
-  const duration = 5000 + Math.min(5000, totalUnits * 20);
+  const duration = 5000;
 
   // Background
   const bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
@@ -650,7 +677,19 @@ function renderBattlefield(playerTotal, playerCas, enemyTotal, enemyCas) {
     for (let i = 0; i < eLoss && i < eSoldiers.length; i++) {
       eSoldiers[i].setAttribute("fill", "#555");
     }
+    if (callback) callback();
   }, duration);
+}
+
+function getOutcomeType(result, playerTotal) {
+  const playerRatio = result.playerCasualties / playerTotal;
+  const enemyRatio = result.enemyCasualties / result.enemyTotal;
+  if (result.playerWin) {
+    if (playerRatio <= 0.1 && enemyRatio >= 0.9) return "completeVictory";
+    return "victory";
+  }
+  if (playerRatio >= 0.9 && enemyRatio <= 0.1) return "completeLoss";
+  return "loss";
 }
 
 /**
