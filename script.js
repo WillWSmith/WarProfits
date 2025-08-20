@@ -75,6 +75,40 @@ let gameState = {
 // Weapon inventory produced by factories
 let weaponInventory = {};
 
+// Stats for each weapon type used in raids
+const weaponStats = {
+  club: { attack: 5, defense: 2, range: 1 },
+  spear: { attack: 7, defense: 3, range: 2 },
+  sling: { attack: 6, defense: 1, range: 5 },
+  bow: { attack: 8, defense: 2, range: 6 },
+  bronzeSword: { attack: 15, defense: 8, range: 2 },
+  bronzeSpear: { attack: 18, defense: 10, range: 3 },
+  bronzeAxe: { attack: 25, defense: 12, range: 2 },
+  ironSword: { attack: 40, defense: 20, range: 2 },
+  ironSpear: { attack: 50, defense: 25, range: 3 },
+  ironCrossbow: { attack: 70, defense: 15, range: 8 },
+  ironCannon: { attack: 120, defense: 30, range: 10 },
+};
+
+// Enemy archetypes for raids
+const enemyTypes = [
+  {
+    name: "Bandit Horde",
+    wealth: 1.0,
+    weaponEffectiveness: { club: 1.2, spear: 1.1, sling: 1.0, bow: 0.8 },
+  },
+  {
+    name: "Mercenary Company",
+    wealth: 1.5,
+    weaponEffectiveness: { bronzeSword: 1.2, bronzeSpear: 1.1, bow: 1.1, ironSword: 0.9 },
+  },
+  {
+    name: "Royal Guard",
+    wealth: 2.0,
+    weaponEffectiveness: { ironSword: 1.2, ironSpear: 1.2, ironCrossbow: 1.3, ironCannon: 1.4 },
+  },
+];
+
 // Siege mission state
 let siegeMission = {
   active: false,
@@ -380,6 +414,10 @@ function showRaidModal() {
   if (modal) {
     modal.style.display = "flex";
     populateRaidLoadout();
+    const resultDiv = document.getElementById("raidResult");
+    if (resultDiv) resultDiv.innerHTML = "";
+    const svg = document.getElementById("battlefield");
+    if (svg) svg.innerHTML = "";
   }
 }
 
@@ -394,14 +432,139 @@ function populateRaidLoadout() {
   container.innerHTML = "";
   for (const key in weaponInventory) {
     const div = document.createElement("div");
-    div.textContent = `${getFactoryNameByKey(key)}:`;
+    const available = Math.floor(weaponInventory[key]);
+    const label = document.createElement("label");
+    label.textContent = `${getFactoryNameByKey(key)} (${available} available):`;
     const input = document.createElement("input");
     input.type = "number";
     input.min = 0;
+    input.max = available;
     input.id = `raid_${key}`;
+    div.appendChild(label);
     div.appendChild(input);
     container.appendChild(div);
   }
+}
+
+// Generate a random enemy based on player army size
+function generateEnemy(playerTotal) {
+  const type = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+  const ratio = 0.6 + Math.random() * 0.6; // 60% to 120%
+  const total = Math.max(1, Math.floor(playerTotal * ratio));
+  const army = {};
+  const weaponKeys = Object.keys(weaponStats);
+  for (let i = 0; i < total; i++) {
+    const w = weaponKeys[Math.floor(Math.random() * weaponKeys.length)];
+    army[w] = (army[w] || 0) + 1;
+  }
+  return { type, army, total };
+}
+
+function calcArmyStats(army, effectiveness = {}) {
+  let power = 0;
+  let total = 0;
+  for (const key in army) {
+    const count = army[key];
+    const stats = weaponStats[key];
+    const eff = effectiveness[key] || 1;
+    power += count * (stats.attack + stats.defense * 0.5 + stats.range * 0.3) * eff;
+    total += count;
+  }
+  return { power, total };
+}
+
+function simulateBattle(playerArmy, enemy) {
+  const playerStats = calcArmyStats(playerArmy);
+  const enemyStats = calcArmyStats(enemy.army, enemy.type.weaponEffectiveness);
+  const playerPower = playerStats.power * (0.9 + Math.random() * 0.2);
+  const enemyPower = enemyStats.power * (0.9 + Math.random() * 0.2);
+  const playerWin = playerPower >= enemyPower;
+  const totalPower = playerPower + enemyPower;
+  const playerCasualties = Math.min(playerStats.total, Math.floor((enemyPower / totalPower) * playerStats.total));
+  const enemyCasualties = Math.min(enemyStats.total, Math.floor((playerPower / totalPower) * enemyStats.total));
+  const victoryScale = Math.abs(playerPower - enemyPower) / Math.max(playerPower, enemyPower);
+  const baseReward = 10 * enemyStats.total;
+  const reward = playerWin ? Math.floor(baseReward * enemy.type.wealth * (1 + victoryScale)) : 0;
+  return { playerWin, playerCasualties, enemyCasualties, reward, enemyType: enemy.type.name, enemyTotal: enemyStats.total };
+}
+
+function startRaid() {
+  const army = {};
+  let total = 0;
+  for (const key in weaponInventory) {
+    const input = document.getElementById(`raid_${key}`);
+    if (!input) continue;
+    const val = parseInt(input.value, 10) || 0;
+    if (val > 0) {
+      if (val > weaponInventory[key]) {
+        alert("Not enough weapons for this raid.");
+        return;
+      }
+      army[key] = val;
+      total += val;
+    }
+  }
+  if (total === 0) {
+    alert("Select weapons to send on the raid.");
+    return;
+  }
+  // Deduct weapons
+  for (const key in army) {
+    weaponInventory[key] -= army[key];
+  }
+  const enemy = generateEnemy(total);
+  const result = simulateBattle(army, enemy);
+  // Return surviving weapons
+  const survivors = total - result.playerCasualties;
+  if (survivors > 0) {
+    for (const key in army) {
+      const proportion = army[key] / total;
+      const survive = Math.round(survivors * proportion);
+      weaponInventory[key] = (weaponInventory[key] || 0) + survive;
+    }
+  }
+  if (result.playerWin) {
+    gameState.money += result.reward;
+  }
+  updateUI();
+  showRaidResult(result, total, enemy);
+}
+
+function showRaidResult(result, playerTotal, enemy) {
+  const output = document.getElementById("raidResult");
+  if (!output) return;
+  output.innerHTML = `<p>Enemy: ${result.enemyType}</p>` +
+    `<p>${result.playerWin ? "Victory" : "Defeat"}! Reward: $${result.reward}</p>` +
+    `<p>Your losses: ${result.playerCasualties} / ${playerTotal}</p>` +
+    `<p>Enemy losses: ${result.enemyCasualties} / ${result.enemyTotal}</p>`;
+  renderBattlefield(playerTotal, result.playerCasualties, result.enemyTotal, result.enemyCasualties);
+}
+
+function renderBattlefield(playerTotal, playerCas, enemyTotal, enemyCas) {
+  const svg = document.getElementById("battlefield");
+  if (!svg) return;
+  svg.innerHTML = "";
+  const maxWidth = 180;
+  const pRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  pRect.setAttribute("x", 10);
+  pRect.setAttribute("y", 20);
+  pRect.setAttribute("height", 20);
+  pRect.setAttribute("fill", "#00e6e6");
+  const eRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  eRect.setAttribute("x", 210);
+  eRect.setAttribute("y", 60);
+  eRect.setAttribute("height", 20);
+  eRect.setAttribute("fill", "#ff0000");
+  svg.appendChild(pRect);
+  svg.appendChild(eRect);
+  pRect.setAttribute("width", maxWidth);
+  eRect.setAttribute("width", maxWidth);
+  const pSurvivorWidth = maxWidth * ((playerTotal - playerCas) / playerTotal);
+  const eSurvivorWidth = maxWidth * ((enemyTotal - enemyCas) / enemyTotal);
+  setTimeout(() => {
+    pRect.setAttribute("width", pSurvivorWidth);
+    eRect.setAttribute("width", eSurvivorWidth);
+  }, 100);
 }
 
 /**
@@ -564,6 +727,8 @@ window.addEventListener("DOMContentLoaded", () => {
   if (raidBtn) raidBtn.addEventListener("click", showRaidModal);
   const closeRaidBtn = document.getElementById("closeRaid");
   if (closeRaidBtn) closeRaidBtn.addEventListener("click", closeRaidModal);
+  const sendRaidBtn = document.getElementById("sendRaid");
+  if (sendRaidBtn) sendRaidBtn.addEventListener("click", startRaid);
 
   // Start loops
   setInterval(gameLoop, 1000);

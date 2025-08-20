@@ -163,6 +163,15 @@ button {
   border-radius: 6px;
 }
 
+#battlefield {
+  margin-top: 10px;
+  background: #111;
+}
+
+#battlefield rect {
+  transition: width 1s ease;
+}
+
 button:hover {
   background: #00e6e6;
   color: #0e163d;
