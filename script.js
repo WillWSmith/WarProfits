@@ -128,10 +128,18 @@ const enemyTypes = [
 ];
 
 const outcomeSVGs = {
-  completeVictory: `<svg width="80" height="50"><polygon points="40,5 47,32 75,32 52,47 60,75 40,58 20,75 28,47 5,32 33,32" fill="#ffd700"/></svg>`,
-  victory: `<svg width="80" height="50"><polyline points="10,25 30,40 70,10" stroke="#0f0" stroke-width="8" fill="none"/></svg>`,
-  loss: `<svg width="80" height="50"><line x1="10" y1="10" x2="70" y2="40" stroke="#f00" stroke-width="8"/><line x1="70" y1="10" x2="10" y2="40" stroke="#f00" stroke-width="8"/></svg>`,
-  completeLoss: `<svg width="80" height="50"><circle cx="40" cy="25" r="24" stroke="#f00" stroke-width="6" fill="none"/><line x1="15" y1="10" x2="65" y2="40" stroke="#f00" stroke-width="6"/><line x1="65" y1="10" x2="15" y2="40" stroke="#f00" stroke-width="6"/></svg>`
+  victory:
+    `<svg width="80" height="50">
+       <rect x="10" y="15" width="20" height="20" fill="#00f"/>
+       <rect x="50" y="20" width="20" height="15" fill="#f00" opacity="0.4"/>
+       <text x="40" y="45" font-size="10" text-anchor="middle" fill="#00f">Victory</text>
+     </svg>`,
+  defeat:
+    `<svg width="80" height="50">
+       <rect x="10" y="20" width="20" height="15" fill="#00f" opacity="0.4"/>
+       <rect x="50" y="15" width="20" height="20" fill="#f00"/>
+       <text x="40" y="45" font-size="10" text-anchor="middle" fill="#f00">Defeat</text>
+     </svg>`
 };
 
 // Siege mission state
@@ -591,9 +599,9 @@ function startRaid() {
 function showRaidResult(result, playerTotal) {
   const output = document.getElementById("raidResult");
   if (!output) return;
-  const outcome = getOutcomeType(result, playerTotal);
+  const outcome = result.playerWin ? "victory" : "defeat";
   output.innerHTML =
-    `<div class="battle-result ${result.playerWin ? "victory" : "defeat"}">` +
+    `<div class="battle-result ${outcome}">` +
     `${outcomeSVGs[outcome]}` +
     `<h3>${result.playerWin ? "Victory" : "Defeat"}</h3>` +
     `<p>Enemy: ${result.enemyType}</p>` +
@@ -609,11 +617,6 @@ function showRaidResult(result, playerTotal) {
     `<p>Enemy losses: ${result.enemyCasualties}</p>` +
     `</div>` +
     `</div>`;
-  const loadout = document.getElementById("raidLoadout");
-  const sendBtn = document.getElementById("sendRaid");
-  if (loadout) loadout.style.display = "block";
-  if (sendBtn) sendBtn.style.display = "inline-block";
-  populateRaidLoadout();
 }
 
 function renderBattlefield(playerTotal, playerCas, enemyTotal, enemyCas, callback) {
@@ -645,6 +648,7 @@ function renderBattlefield(playerTotal, playerCas, enemyTotal, enemyCas, callbac
     c.setAttribute("cy", y);
     c.setAttribute("r", 5);
     c.setAttribute("class", "soldier player");
+    c.setAttribute("fill", "#00f");
     const anim = document.createElementNS("http://www.w3.org/2000/svg", "animate");
     anim.setAttribute("attributeName", "cx");
     anim.setAttribute("from", c.getAttribute("cx"));
@@ -663,6 +667,7 @@ function renderBattlefield(playerTotal, playerCas, enemyTotal, enemyCas, callbac
     c.setAttribute("cy", y);
     c.setAttribute("r", 5);
     c.setAttribute("class", "soldier enemy");
+    c.setAttribute("fill", "#f00");
     const anim = document.createElementNS("http://www.w3.org/2000/svg", "animate");
     anim.setAttribute("attributeName", "cx");
     anim.setAttribute("from", c.getAttribute("cx"));
@@ -688,17 +693,6 @@ function renderBattlefield(playerTotal, playerCas, enemyTotal, enemyCas, callbac
     }
     if (callback) callback();
   }, duration);
-}
-
-function getOutcomeType(result, playerTotal) {
-  if (result.playerWin) {
-    const noPlayerLosses = result.playerCasualties === 0;
-    const enemyWipedOut = result.enemyCasualties >= result.enemyTotal;
-    return noPlayerLosses && enemyWipedOut ? "completeVictory" : "victory";
-  }
-  const playerWipedOut = result.playerCasualties >= playerTotal;
-  const enemyUnscathed = result.enemyCasualties === 0;
-  return playerWipedOut && enemyUnscathed ? "completeLoss" : "loss";
 }
 
 /**

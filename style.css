@@ -173,7 +173,7 @@ button {
   stroke-width: 1;
 }
 .soldier.player {
-  fill: #00e6e6;
+  fill: #0000ff;
 }
 .soldier.enemy {
   fill: #ff0000;
