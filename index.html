@@ -35,7 +35,25 @@
       <p>Money: $<span id="money">0</span></p>
       <button id="saveButton">Save Game</button>
       <div id="saveNotice" style="display: none;">Game Saved!</div>
+      <button id="raidButton" class="raid-button">RAID</button>
     </div>
+
+    <section class="inventory-section">
+      <h2>Weapon Stock</h2>
+      <ul id="weaponInventory"></ul>
+    </section>
+
+    <section class="missions-section">
+      <h2>Missions</h2>
+      <div id="siegeMission">
+        <p id="siegeStatus">No siege in progress.</p>
+        <div id="siegeControls">
+          <select id="siegeWeaponSelect"></select>
+          <input type="number" id="siegeWeaponAmount" value="10" min="1">
+          <button id="startSiege">Start Siege (14h)</button>
+        </div>
+      </div>
+    </section>
 
     <section class="research-section">
       <h2><img src="images/flask.png" alt="Research icon" class="research-icon">Research Lab</h2>
@@ -49,6 +67,14 @@
   <footer>
     <p>Made for fun — scale through history and earn your war profits!</p>
   </footer>
+
+  <div id="raidModal" class="modal">
+    <div class="modal-content">
+      <h2>Raid</h2>
+      <div id="raidLoadout"></div>
+      <button id="closeRaid">Close</button>
+    </div>
+  </div>
 
   <script src="script.js"></script>
 </body>

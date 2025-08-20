@@ -121,6 +121,48 @@ button {
   text-transform: uppercase;
 }
 
+.raid-button {
+  background: #a00;
+  border-color: #ff0000;
+  color: #fff;
+}
+
+.raid-button:hover {
+  background: #ff0000;
+  color: #0e163d;
+  box-shadow: 0 0 10px #ff0000;
+}
+
+.inventory-section,
+.missions-section {
+  margin-bottom: 40px;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(19, 19, 31, 0.85);
+  border: 2px solid #00e6e6;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+}
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-content {
+  background: rgba(27,27,40,0.95);
+  padding: 20px;
+  border: 2px solid #ff0000;
+  color: #fff;
+  border-radius: 6px;
+}
+
 button:hover {
   background: #00e6e6;
   color: #0e163d;

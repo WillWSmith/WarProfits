@@ -11,42 +11,42 @@
 
 // ***** AGE & FACTORY DEFINITIONS *****
 
-// Define all ages with their factories.  Each factory defines a base gold per
-// minute (gpm), a base cost and a cost multiplier.  New ages have higher
+// Define all ages with their factories.  Each factory defines a base weapons per
+// minute (wpm), a base cost and a cost multiplier.  New ages have higher
 // multipliers to make late‑game purchases more expensive.
 const ages = {
   stone: {
     name: "Stone Age",
     factories: {
       /**
-       * Each factory defines its base gold per minute (gpm), base cost, cost
+       * Each factory defines its base weapons per minute (wpm), base cost, cost
        * multiplier and the number owned.  To improve the initial game
        * experience we start the player with one Wood Club factory.  Without
        * this starter factory players would have zero income and no way to
        * progress.  Giving one factory provides an immediate trickle of
        * income while still encouraging players to purchase more factories.
        */
-      club:    { name: "Wood Club",          baseGpm: 60,     baseCost: 50,      multiplier: 1.15, owned: 1 },
-      spear:   { name: "Stone Spear",         baseGpm: 180,    baseCost: 100,     multiplier: 1.15, owned: 0 },
-      sling:   { name: "Sling",               baseGpm: 400,    baseCost: 300,     multiplier: 1.15, owned: 0 },
-      bow:     { name: "Bow & Stone Arrows",  baseGpm: 600,    baseCost: 600,     multiplier: 1.15, owned: 0 },
+      club:    { name: "Wood Club",          baseWpm: 60,     baseCost: 50,      multiplier: 1.15, owned: 1 },
+      spear:   { name: "Stone Spear",         baseWpm: 180,    baseCost: 100,     multiplier: 1.15, owned: 0 },
+      sling:   { name: "Sling",               baseWpm: 400,    baseCost: 300,     multiplier: 1.15, owned: 0 },
+      bow:     { name: "Bow & Stone Arrows",  baseWpm: 600,    baseCost: 600,     multiplier: 1.15, owned: 0 },
     },
   },
   bronze: {
     name: "Bronze Age",
     factories: {
-      bronzeSword: { name: "Bronze Sword", baseGpm: 4000, baseCost: 3000, multiplier: 1.18, owned: 0 },
-      bronzeSpear: { name: "Bronze Spear", baseGpm: 10000, baseCost: 8000, multiplier: 1.18, owned: 0 },
-      bronzeAxe:   { name: "Bronze Axe",   baseGpm: 25000, baseCost: 20000, multiplier: 1.18, owned: 0 },
+      bronzeSword: { name: "Bronze Sword", baseWpm: 4000, baseCost: 3000, multiplier: 1.18, owned: 0 },
+      bronzeSpear: { name: "Bronze Spear", baseWpm: 10000, baseCost: 8000, multiplier: 1.18, owned: 0 },
+      bronzeAxe:   { name: "Bronze Axe",   baseWpm: 25000, baseCost: 20000, multiplier: 1.18, owned: 0 },
     },
   },
   iron: {
     name: "Iron Age",
     factories: {
-      ironSword:  { name: "Iron Sword",   baseGpm: 400000,  baseCost: 300000,  multiplier: 1.22, owned: 0 },
-      ironSpear:  { name: "Iron Spear",   baseGpm: 1000000, baseCost: 800000,  multiplier: 1.22, owned: 0 },
-      ironCrossbow:{ name: "Iron Crossbow", baseGpm: 2500000, baseCost: 2000000, multiplier: 1.22, owned: 0 },
-      ironCannon: { name: "Iron Cannon",  baseGpm: 6000000, baseCost: 5000000, multiplier: 1.22, owned: 0 },
+      ironSword:  { name: "Iron Sword",   baseWpm: 400000,  baseCost: 300000,  multiplier: 1.22, owned: 0 },
+      ironSpear:  { name: "Iron Spear",   baseWpm: 1000000, baseCost: 800000,  multiplier: 1.22, owned: 0 },
+      ironCrossbow:{ name: "Iron Crossbow", baseWpm: 2500000, baseCost: 2000000, multiplier: 1.22, owned: 0 },
+      ironCannon: { name: "Iron Cannon",  baseWpm: 6000000, baseCost: 5000000, multiplier: 1.22, owned: 0 },
     },
   },
 };
@@ -72,6 +72,18 @@ let gameState = {
   lastUpdate: Date.now(),
 };
 
+// Weapon inventory produced by factories
+let weaponInventory = {};
+
+// Siege mission state
+let siegeMission = {
+  active: false,
+  endTime: 0,
+  reward: 0,
+  weaponType: "",
+  weaponsSent: 0,
+};
+
 // Scientist data
 const scientists = {
   count: 0,
@@ -93,6 +105,18 @@ function flashElement(el) {
   setTimeout(() => el.classList.remove("purchase-flash"), 500);
 }
 
+// Initialize weapon inventory with zero counts for each factory
+function initInventory() {
+  for (const ageKey in ages) {
+    const age = ages[ageKey];
+    for (const key in age.factories) {
+      if (weaponInventory[key] === undefined) {
+        weaponInventory[key] = 0;
+      }
+    }
+  }
+}
+
 // ***** UTILITY FUNCTIONS *****
 
 /**
@@ -104,12 +128,12 @@ function getFactoryCost(factory) {
 }
 
 /**
- * Determine the effective GPM for a factory with milestone bonuses.
- * Every 25 factories owned doubles the base GPM.
+ * Determine the effective WPM for a factory with milestone bonuses.
+ * Every 25 factories owned doubles the base WPM.
  */
-function getEffectiveGpm(factory) {
+function getEffectiveWpm(factory) {
   const milestones = Math.floor(factory.owned / 25);
-  return factory.baseGpm * Math.pow(2, milestones);
+  return factory.baseWpm * Math.pow(2, milestones);
 }
 
 /**
@@ -128,17 +152,17 @@ function initAgeUI(ageKey) {
     div.id = `${ageKey}-${key}-card`;
 
     const cost = getFactoryCost(factory);
-    // Display production in gold per hour (gph) rather than per minute.
-    const gph = factory.baseGpm * 60;
-    const effectiveGph = getEffectiveGpm(factory) * 60;
-    const output = factory.owned > 0 ? factory.owned * effectiveGph : gph;
+    // Display production in weapons per hour (wph)
+    const wph = factory.baseWpm * 60;
+    const effectiveWph = getEffectiveWpm(factory) * 60;
+    const output = factory.owned > 0 ? factory.owned * effectiveWph : wph;
     div.setAttribute(
       "title",
-      `Each ${factory.name} factory produces $${gph.toLocaleString()}/hr. Every 25 owned doubles output.`
+      `Each ${factory.name} factory produces ${wph.toLocaleString()} weapons/hr. Every 25 owned doubles output.`
     );
     div.innerHTML = `
       <h3>${factory.name}</h3>
-      <p id="${ageKey}-${key}-info">${factory.owned} owned — +$${output.toLocaleString()}/hr${factory.owned === 0 ? " each" : ""}</p>
+      <p id="${ageKey}-${key}-info">${factory.owned} owned — +${output.toLocaleString()} weapons/hr${factory.owned === 0 ? " each" : ""}</p>
       <button id="buy-${ageKey}-${key}">Buy ($${cost.toLocaleString()})</button>
     `;
     container.appendChild(div);
@@ -160,11 +184,13 @@ function updateFactoriesUI() {
       const buyBtn = document.getElementById(`buy-${ageKey}-${key}`);
       const card = document.getElementById(`${ageKey}-${key}-card`);
 
-      const effectiveGpm = getEffectiveGpm(f);
-      const effectiveGph = effectiveGpm * 60;
-      const baseGph = f.baseGpm * 60;
-      const rate = f.owned > 0 ? f.owned * effectiveGph : baseGph;
-      info.textContent = `${f.owned} owned — +$${rate.toLocaleString()}/hr${f.owned === 0 ? ' each' : ''}`;
+      const effectiveWpm = getEffectiveWpm(f);
+      const effectiveWph = effectiveWpm * 60;
+      const baseWph = f.baseWpm * 60;
+      const rate = f.owned > 0 ? f.owned * effectiveWph : baseWph;
+      if (info) {
+        info.textContent = `${f.owned} owned — +${rate.toLocaleString()} weapons/hr${f.owned === 0 ? ' each' : ''}`;
+      }
 
       if (buyBtn) {
         buyBtn.textContent = `Buy ($${getFactoryCost(f).toLocaleString()})`;
@@ -173,7 +199,7 @@ function updateFactoriesUI() {
       if (card) {
         const remainder = f.owned % 25;
         const nextBonus = remainder === 0 ? 25 : 25 - remainder;
-        card.title = `Each ${f.name} factory produces $${effectiveGph.toLocaleString()}/hr. ${f.owned} owned. ${nextBonus} until next bonus.`;
+        card.title = `Each ${f.name} factory produces ${effectiveWph.toLocaleString()} weapons/hr. ${f.owned} owned. ${nextBonus} until next bonus.`;
       }
     }
   }
@@ -197,17 +223,18 @@ function buyFactory(ageKey, factoryKey, cardElement) {
 /**
  * Calculate total income per second from all unlocked ages.
  */
-function calculateIncomePerSecond() {
-  let gps = 0;
+function calculateWeaponProductionPerSecond() {
+  const wps = {};
   for (const ageKey in ages) {
     if (!agesUnlocked[ageKey]) continue;
     const age = ages[ageKey];
     for (const key in age.factories) {
       const f = age.factories[key];
-      gps += (f.owned * getEffectiveGpm(f)) / 60;
+      const amount = (f.owned * getEffectiveWpm(f)) / 60;
+      wps[key] = (wps[key] || 0) + amount;
     }
   }
-  return gps;
+  return wps;
 }
 
 /**
@@ -269,6 +296,114 @@ function updateResearchUI() {
   document.getElementById("buyScientist").textContent = `Hire Scientist ($${cost.toLocaleString()})`;
 }
 
+// Update weapon inventory display
+function updateInventoryUI() {
+  const list = document.getElementById("weaponInventory");
+  if (!list) return;
+  list.innerHTML = "";
+  for (const key in weaponInventory) {
+    const li = document.createElement("li");
+    li.textContent = `${getFactoryNameByKey(key)}: ${Math.floor(weaponInventory[key]).toLocaleString()}`;
+    list.appendChild(li);
+  }
+  populateWeaponOptions();
+}
+
+// Update siege mission UI
+function updateSiegeUI() {
+  const status = document.getElementById("siegeStatus");
+  const controls = document.getElementById("siegeControls");
+  if (!status || !controls) return;
+  if (siegeMission.active) {
+    controls.style.display = "none";
+    const remaining = Math.max(0, siegeMission.endTime - Date.now());
+    const hrs = Math.floor(remaining / 3600000);
+    const mins = Math.floor((remaining % 3600000) / 60000);
+    const secs = Math.floor((remaining % 60000) / 1000);
+    status.textContent = `Siege in progress: ${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  } else {
+    controls.style.display = "block";
+    status.textContent = "No siege in progress.";
+  }
+}
+
+// Populate weapon dropdown for siege mission
+function populateWeaponOptions() {
+  const select = document.getElementById("siegeWeaponSelect");
+  if (!select) return;
+  const current = select.value;
+  select.innerHTML = "";
+  for (const key in weaponInventory) {
+    const option = document.createElement("option");
+    option.value = key;
+    option.textContent = getFactoryNameByKey(key);
+    select.appendChild(option);
+  }
+  if (weaponInventory[current] !== undefined) {
+    select.value = current;
+  }
+}
+
+function getFactoryNameByKey(key) {
+  for (const ageKey in ages) {
+    const f = ages[ageKey].factories;
+    if (f[key]) return f[key].name;
+  }
+  return key;
+}
+
+// Start a siege mission
+function startSiegeMission() {
+  const select = document.getElementById("siegeWeaponSelect");
+  const amountInput = document.getElementById("siegeWeaponAmount");
+  const type = select.value;
+  const amount = parseInt(amountInput.value, 10);
+  if (!type || isNaN(amount) || amount <= 0) return;
+  if ((weaponInventory[type] || 0) < amount) {
+    alert("Not enough weapons for this siege.");
+    return;
+  }
+  weaponInventory[type] -= amount;
+  const reward = amount * 10;
+  siegeMission = {
+    active: true,
+    endTime: Date.now() + 14 * 60 * 60 * 1000,
+    reward,
+    weaponType: type,
+    weaponsSent: amount,
+  };
+  updateSiegeUI();
+}
+
+function showRaidModal() {
+  const modal = document.getElementById("raidModal");
+  if (modal) {
+    modal.style.display = "flex";
+    populateRaidLoadout();
+  }
+}
+
+function closeRaidModal() {
+  const modal = document.getElementById("raidModal");
+  if (modal) modal.style.display = "none";
+}
+
+function populateRaidLoadout() {
+  const container = document.getElementById("raidLoadout");
+  if (!container) return;
+  container.innerHTML = "";
+  for (const key in weaponInventory) {
+    const div = document.createElement("div");
+    div.textContent = `${getFactoryNameByKey(key)}:`;
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = 0;
+    input.id = `raid_${key}`;
+    div.appendChild(input);
+    container.appendChild(div);
+  }
+}
+
 /**
  * Hire a scientist if enough money is available.
  */
@@ -293,6 +428,8 @@ function saveGame() {
     ageFactories: {},
     researchIndex: currentResearchIndex,
     researchProgress: {},
+    weaponInventory,
+    siegeMission,
   };
   // Save factory counts per age
   for (const ageKey in ages) {
@@ -321,6 +458,8 @@ function loadGame() {
     gameState.money = data.money || 0;
     gameState.lastUpdate = data.lastUpdate || Date.now();
     scientists.count = data.scientists || 0;
+    weaponInventory = data.weaponInventory || {};
+    siegeMission = data.siegeMission || { active: false, endTime: 0, reward: 0, weaponType: "", weaponsSent: 0 };
     // Restore unlocked ages
     for (const ageKey in agesUnlocked) {
       agesUnlocked[ageKey] = data.agesUnlocked ? data.agesUnlocked[ageKey] : (ageKey === "stone");
@@ -363,8 +502,16 @@ function gameLoop() {
   const elapsed = (now - gameState.lastUpdate) / 1000;
   gameState.lastUpdate = now;
 
-  const income = calculateIncomePerSecond();
-  gameState.money += income * elapsed;
+  const production = calculateWeaponProductionPerSecond();
+  for (const key in production) {
+    weaponInventory[key] += production[key] * elapsed;
+  }
+
+  // Resolve siege mission rewards
+  if (siegeMission.active && now >= siegeMission.endTime) {
+    gameState.money += siegeMission.reward;
+    siegeMission.active = false;
+  }
 
   // Update research
   updateResearch(elapsed);
@@ -380,11 +527,14 @@ function updateUI() {
   document.getElementById("money").textContent = Math.floor(gameState.money).toLocaleString();
   updateFactoriesUI();
   updateResearchUI();
+  updateInventoryUI();
+  updateSiegeUI();
 }
 
 // ***** INITIALIZATION *****
 window.addEventListener("DOMContentLoaded", () => {
   loadGame();
+  initInventory();
   // If there is no existing save, ensure the player starts with one Wood Club factory
   if (!localStorage.getItem("warprofits-standard-save")) {
     // Guarantee at least one starter factory for initial income
@@ -408,6 +558,12 @@ window.addEventListener("DOMContentLoaded", () => {
   // Event listeners
   document.getElementById("buyScientist").addEventListener("click", hireScientist);
   document.getElementById("saveButton").addEventListener("click", saveGame);
+  const startSiegeBtn = document.getElementById("startSiege");
+  if (startSiegeBtn) startSiegeBtn.addEventListener("click", startSiegeMission);
+  const raidBtn = document.getElementById("raidButton");
+  if (raidBtn) raidBtn.addEventListener("click", showRaidModal);
+  const closeRaidBtn = document.getElementById("closeRaid");
+  if (closeRaidBtn) closeRaidBtn.addEventListener("click", closeRaidModal);
 
   // Start loops
   setInterval(gameLoop, 1000);
