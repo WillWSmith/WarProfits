@@ -194,6 +194,11 @@ button {
   color: #f00;
 }
 
+.battle-result .section-title {
+  font-weight: bold;
+  margin-top: 8px;
+}
+
 button:hover {
   background: #00e6e6;
   color: #0e163d;

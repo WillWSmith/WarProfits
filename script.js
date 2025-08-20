@@ -584,21 +584,30 @@ function startRaid() {
   if (sendBtn) sendBtn.style.display = "none";
   if (output) output.innerHTML = "";
   renderBattlefield(total, result.playerCasualties, result.enemyTotal, result.enemyCasualties, () => {
-    showRaidResult(result, total, enemy);
+    showRaidResult(result, total);
   });
 }
 
-function showRaidResult(result, playerTotal, enemy) {
+function showRaidResult(result, playerTotal) {
   const output = document.getElementById("raidResult");
   if (!output) return;
   const outcome = getOutcomeType(result, playerTotal);
-  output.innerHTML = `<div class="battle-result ${result.playerWin ? "victory" : "defeat"}">` +
+  output.innerHTML =
+    `<div class="battle-result ${result.playerWin ? "victory" : "defeat"}">` +
     `${outcomeSVGs[outcome]}` +
     `<h3>${result.playerWin ? "Victory" : "Defeat"}</h3>` +
     `<p>Enemy: ${result.enemyType}</p>` +
     `<p>Reward: $${result.reward}</p>` +
-    `<p>Your losses: ${result.playerCasualties} / ${playerTotal}</p>` +
-    `<p>Enemy losses: ${result.enemyCasualties} / ${result.enemyTotal}</p>` +
+    `<div class="army-report">` +
+    `<p class="section-title">Armies</p>` +
+    `<p>Your army: ${playerTotal}</p>` +
+    `<p>Enemy army: ${result.enemyTotal}</p>` +
+    `</div>` +
+    `<div class="casualty-report">` +
+    `<p class="section-title">Casualties</p>` +
+    `<p>Your losses: ${result.playerCasualties}</p>` +
+    `<p>Enemy losses: ${result.enemyCasualties}</p>` +
+    `</div>` +
     `</div>`;
   const loadout = document.getElementById("raidLoadout");
   const sendBtn = document.getElementById("sendRaid");
@@ -682,14 +691,14 @@ function renderBattlefield(playerTotal, playerCas, enemyTotal, enemyCas, callbac
 }
 
 function getOutcomeType(result, playerTotal) {
-  const playerRatio = result.playerCasualties / playerTotal;
-  const enemyRatio = result.enemyCasualties / result.enemyTotal;
   if (result.playerWin) {
-    if (playerRatio <= 0.1 && enemyRatio >= 0.9) return "completeVictory";
-    return "victory";
+    const noPlayerLosses = result.playerCasualties === 0;
+    const enemyWipedOut = result.enemyCasualties >= result.enemyTotal;
+    return noPlayerLosses && enemyWipedOut ? "completeVictory" : "victory";
   }
-  if (playerRatio >= 0.9 && enemyRatio <= 0.1) return "completeLoss";
-  return "loss";
+  const playerWipedOut = result.playerCasualties >= playerTotal;
+  const enemyUnscathed = result.enemyCasualties === 0;
+  return playerWipedOut && enemyUnscathed ? "completeLoss" : "loss";
 }
 
 /**
